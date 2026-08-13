@@ -45,7 +45,7 @@ test('imports, reviews and preserves independent B2B and creator workspaces', as
   await importWorkbook(page, creatorPath);
   await expect(page.getByRole('heading', { name: 'Creator partnership workspace' })).toBeVisible();
   await expect(page.getByText('Creator 1', { exact: true }).first()).toBeVisible();
-  await page.locator('.creator-card').first().getByRole('button', { name: 'Approve' }).click();
+  await page.locator('.creator-card').first().getByRole('button', { name: 'Approve', exact: true }).click();
 
   await page.getByRole('button', { name: 'B2B Prospects' }).click();
   await expect(page.getByRole('heading', { name: 'Prospect review workspace' })).toBeVisible();
