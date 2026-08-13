@@ -31,8 +31,9 @@ test('imports, reviews and preserves independent B2B and creator workspaces', as
 
   const firstProspect = page.locator('.prospect-card').first();
   await firstProspect.getByRole('button', { name: 'Review full profile' }).click();
-  await expect(page.getByRole('heading', { name: 'Prospect 1', exact: true })).toBeVisible();
-  await expect(page.getByText('Hypothesis · not a verified fact')).toBeVisible();
+  const detailPanel = page.getByRole('dialog', { name: 'Prospect 1', exact: true });
+  await expect(detailPanel).toBeVisible();
+  await expect(detailPanel.getByText('Hypothesis · not a verified fact')).toBeVisible();
   await page.getByRole('button', { name: 'Close detail panel' }).click();
   await firstProspect.getByRole('button', { name: 'Shortlist' }).click();
   await expect(firstProspect.getByRole('button', { name: 'Shortlist' })).toHaveAttribute('aria-pressed', 'true');
