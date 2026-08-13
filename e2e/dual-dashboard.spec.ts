@@ -72,3 +72,78 @@ test('B2B review supports comparison and full-fidelity export', async ({ page },
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^bntyful-b2b-all-\d{4}-\d{2}-\d{2}\.csv$/);
 });
+
+test('B2B cards stay full-width and collision-free at responsive breakpoints', async ({ page }, testInfo) => {
+  const rows = b2bRows(3);
+  const headers = rows[3];
+  const firstRecord = rows[4];
+  const setCell = (header: string, value: CellValue) => {
+    const index = headers.indexOf(header);
+    if (index < 0) throw new Error(`Missing B2B test header: ${header}`);
+    firstRecord[index] = value;
+  };
+  setCell('Company Name', 'International Hospitality Property Operations Group');
+  setCell('Subcategory', 'Multi-market estates, lodges, restaurants and franchise operations');
+  setCell('Location (City)', 'Johannesburg, Gauteng, South Africa');
+  setCell('Role', 'Group Chief Executive Officer and Operational Transformation Sponsor');
+  setCell('Observed Campaign Activity', 'Reported extensive multi-market activity across hospitality, property operations, restaurant portfolios and franchise locations.');
+  setCell('Hypothesized Pain', 'A distributed operating model may create fragmented coordination, duplicated processes and inconsistent visibility across teams.');
+  setCell('Outreach Angle', 'Lead with a practical operating-intelligence discussion focused on consistency, evidence and measurable execution improvements.');
+
+  const b2bPath = createWorkbook(rows, 'responsive-prospects.xlsx', testInfo);
+  await page.goto('/');
+  await page.getByRole('button', { name: /B2B prospect list/ }).click();
+  await importWorkbook(page, b2bPath);
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 900 },
+    { width: 768, height: 900 },
+    { width: 390, height: 844 },
+    { width: 320, height: 760 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const card = page.locator('.prospect-card').first();
+    await expect(card).toBeVisible();
+
+    const layout = await card.evaluate(element => {
+      type Box = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+      const box = (target: Element): Box => {
+        const rect = target.getBoundingClientRect();
+        return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+      };
+      const overlaps = (a: Box, b: Box) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0.5;
+      const required = (selector: string) => {
+        const target = element.querySelector(selector);
+        if (!target) throw new Error(`Missing responsive card region: ${selector}`);
+        return target;
+      };
+      const cardBox = box(element);
+      const primaryRegions = ['.prospect-card__summary', '.prospect-card__insights', '.prospect-card__actions'].map(selector => box(required(selector)));
+      const summaryRegions = ['.prospect-card__identity', '.prospect-card__scores', '.prospect-card__contact'].map(selector => box(required(selector)));
+      const actionButtons = [...required('.prospect-card__actions').querySelectorAll('button')].map(box);
+      const pairsOverlap = (boxes: Box[]) => boxes.some((current, index) => boxes.slice(index + 1).some(next => overlaps(current, next)));
+      const descendants = [...element.querySelectorAll('.prospect-card__summary, .prospect-card__insights, .prospect-card__actions, .prospect-card__identity, .prospect-card__scores, .prospect-card__contact')].map(box);
+      return {
+        card: cardBox,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        primaryOverlap: pairsOverlap(primaryRegions),
+        summaryOverlap: pairsOverlap(summaryRegions),
+        actionOverlap: pairsOverlap(actionButtons),
+        contentEscapesCard: descendants.some(region => region.left < cardBox.left - 0.5 || region.right > cardBox.right + 0.5),
+        minimumActionHeight: Math.min(...actionButtons.map(button => button.height)),
+        insightWhiteSpace: getComputedStyle(required('.prospect-card__insight p')).whiteSpace,
+      };
+    });
+
+    expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+    expect(layout.card.width).toBeGreaterThanOrEqual(viewport.width - 48);
+    expect(layout.primaryOverlap).toBe(false);
+    expect(layout.summaryOverlap).toBe(false);
+    expect(layout.actionOverlap).toBe(false);
+    expect(layout.contentEscapesCard).toBe(false);
+    expect(layout.insightWhiteSpace).toBe('normal');
+    if (viewport.width <= 390) expect(layout.minimumActionHeight).toBeGreaterThanOrEqual(40);
+  }
+});
