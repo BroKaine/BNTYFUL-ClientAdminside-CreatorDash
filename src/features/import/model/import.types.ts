@@ -186,6 +186,7 @@ export type WorkerRequest = {
   fileSize: number;
   expectedKind: DatasetKind;
   parserUrl: string;
+  parserWorkerUrl: string;
 };
 
 export type WorkerResponse =

@@ -9,7 +9,7 @@ Both dashboards share BNTYFUL's shell and design language. Their schemas, filter
 
 ## Privacy and data handling
 
-Workbooks are parsed in the browser in a dedicated Web Worker. Workbook data is not uploaded to an application server, analytics service, or LLM. Imported records remain in memory for the current session. Review decisions and small view preferences are stored locally and are scoped to a deterministic dataset fingerprint.
+Workbooks are parsed and normalized in a dedicated in-browser worker pipeline. Workbook data is not uploaded to an application server, analytics service, or LLM. Imported records remain in memory for the current session. Review decisions and small view preferences are stored locally and are scoped to a deterministic dataset fingerprint.
 
 External company/profile links are opened only when a user deliberately selects them.
 
@@ -83,7 +83,7 @@ See [docs/architecture.md](docs/architecture.md). The core design is:
 - `src/features/creator` — creator model, selectors, dashboard, details, decisions.
 - `src/features/b2b` — B2B model, dynamic faceting, dashboard, table, detail, comparison.
 - `src/shared` — domain-neutral links, dates, taxonomy, persistence, CSV, and UI primitives.
-- `src/workers` — isolated spreadsheet processing.
+- `src/workers` and `public/workers` — isolated normalization and classic parsing workers.
 - `public/vendor/sheetjs` — pinned official SheetJS CE browser distribution.
 
 ## Security

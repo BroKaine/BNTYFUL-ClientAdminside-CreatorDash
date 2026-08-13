@@ -47,7 +47,10 @@ export function useWorkbookImport() {
     setState({ ...INITIAL_STATE, status: 'reading', progress: 5 });
     try {
       const buffer = await file.arrayBuffer();
-      const worker = new Worker(new URL('../../../workers/spreadsheet.worker.ts', import.meta.url));
+      const worker = new Worker(new URL('../../../workers/spreadsheet.worker.ts', import.meta.url), {
+        type: 'module',
+        name: 'bntyful-spreadsheet-normalizer',
+      });
       workerRef.current = worker;
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
         const response = event.data;
@@ -73,6 +76,7 @@ export function useWorkbookImport() {
         fileSize: file.size,
         expectedKind,
         parserUrl: new URL('vendor/sheetjs/xlsx.full.min.js', document.baseURI).href,
+        parserWorkerUrl: new URL('workers/spreadsheet-parser.js', document.baseURI).href,
       }, [buffer]);
     } catch (error) {
       terminate();

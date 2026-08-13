@@ -7,14 +7,14 @@ Creator and B2B are separate feature domains. Each owns its record model, filter
 ## Import pipeline
 
 1. The UI validates extension and the 50 MiB limit.
-2. A dedicated classic Web Worker lazy-loads the local, vendored SheetJS parser.
-3. The first worksheet is converted to raw row arrays without formula or HTML processing.
-4. Weighted signatures detect Creator versus B2B independently.
+2. A Vite module worker creates a dependency-free, same-origin classic parser worker.
+3. The parser worker lazy-loads the local, vendored SheetJS artifact and converts the first worksheet to raw rows without formula or HTML processing.
+4. The module worker receives those rows and applies weighted Creator-versus-B2B schema detection.
 5. A domain parser preserves source rows while producing typed normalized records and data issues.
 6. A deterministic dataset fingerprint is calculated from schema version and sorted stable record IDs.
-7. The main thread displays preflight before activating the dashboard.
+7. The main thread receives the finished report and displays preflight before activating the dashboard.
 
-The worker is terminated after completion, cancellation, or failure.
+The worker pipeline is terminated after completion, cancellation, or failure. Parsing, detection, normalization, and validation all remain off the main thread.
 
 ## Raw and normalized data
 
@@ -38,7 +38,7 @@ Repairs never overwrite the source map. Full-fidelity export reconstructs the or
 
 ## Performance
 
-- The parser is excluded from initial bundles and loaded only inside the worker.
+- The parser is excluded from initial bundles and loaded only inside the classic parser worker.
 - Feature dashboards and detail/compare code are split from the core route.
 - Free-text search is debounced by 200 ms.
 - Table rows are virtualized with overscan.
