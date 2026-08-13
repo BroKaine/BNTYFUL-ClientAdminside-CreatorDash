@@ -8,7 +8,8 @@ function createWorkbook(rows: CellValue[][], fileName: string, testInfo: TestInf
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Research');
   const filePath = testInfo.outputPath(fileName);
-  writeFileSync(filePath, XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }));
+  const bytes = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+  writeFileSync(filePath, new Uint8Array(bytes));
   return filePath;
 }
 
