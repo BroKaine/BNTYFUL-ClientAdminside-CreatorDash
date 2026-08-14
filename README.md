@@ -1,73 +1,97 @@
-# React + TypeScript + Vite
+# BNTYFUL Research Intelligence
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A local-first review application for two independent research workflows:
 
-Currently, two official plugins are available:
+- **Creator Intelligence** — evaluate creators, audiences, content fit, authority, access, evidence, and partnership opportunities.
+- **B2B Prospect Intelligence** — evaluate companies, decision makers, qualification signals, commercial hypotheses, evidence, and outreach readiness.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Both dashboards share BNTYFUL's shell and design language. Their schemas, filters, review decisions, persistence, and exports remain independent.
 
-## React Compiler
+## Privacy and data handling
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Workbooks are parsed and normalized in a dedicated in-browser worker pipeline. Workbook data is not uploaded to an application server, analytics service, or LLM. Imported records remain in memory for the current session. Review decisions and small view preferences are stored locally and are scoped to a deterministic dataset fingerprint.
 
-## Expanding the ESLint configuration
+External company/profile links are opened only when a user deliberately selects them.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Supported files
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- `.xlsx`, `.xls`, and `.csv`
+- first worksheet only
+- maximum 50 MiB
+- maximum 25,000 data rows
+- supported headers can appear within the first ten non-empty rows
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+See [docs/workbook-format.md](docs/workbook-format.md) for the complete contracts. Categories, subcategories, locations, tiers, and pipeline values are always derived from the current workbook; no client or industry taxonomy is hardcoded.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Product workflow
+
+1. Choose Creator or B2B Prospect.
+2. Drop or select a workbook.
+3. Review the import preflight, including structural and data-quality notes.
+4. Continue into the automatically detected dashboard.
+5. Search, filter, sort, and switch between cards and a virtualized dense table.
+6. Open full evidence and pipeline detail without losing list context.
+7. Apply local review decisions: Approved/Not approved for creators; Shortlisted/Not a fit for B2B.
+8. Compare two to four B2B prospects.
+9. Export approved, shortlisted, filtered, or all records as full-fidelity safe CSV.
+
+## Local development
+
+Requires Node.js 22 or a compatible current LTS release.
+
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The Vite development server defaults to `http://localhost:3000`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Quality commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run test:coverage
+npm run build
+npm run test:e2e
+npm audit --omit=dev --audit-level=high
 ```
+
+`npm run check` runs typecheck, lint, unit/integration tests, and a production build.
+
+To validate the two canonical samples without committing their contents:
+
+```bash
+npm run validate:samples -- "/path/to/Creator sample.xlsx" "/path/to/B2B sample.xlsx"
+```
+
+## Keyboard productivity
+
+- `/` focuses search.
+- `j` / `k` opens the next/previous record in the current filtered order.
+- `s` toggles approval/shortlist while a detail record is open.
+- `Esc` closes detail or comparison and restores focus.
+
+Every shortcut has an ordinary on-screen control; shortcuts are disabled while typing.
+
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md). The core design is:
+
+- `src/features/import` — schema detection, preflight, normalization, issue reporting.
+- `src/features/creator` — creator model, selectors, dashboard, details, decisions.
+- `src/features/b2b` — B2B model, dynamic faceting, dashboard, table, detail, comparison.
+- `src/shared` — domain-neutral links, dates, taxonomy, persistence, CSV, and UI primitives.
+- `src/workers` and `public/workers` — isolated normalization and classic parsing workers.
+- `public/vendor/sheetjs` — pinned official SheetJS CE browser distribution.
+
+## Security
+
+- Workbook content is treated as untrusted text and rendered through React escaping.
+- Macros, formulas, HTML, and embedded scripts are not executed.
+- External navigation is limited to safe HTTP(S) links constructed centrally.
+- No automatic external image, favicon, metadata, or preview requests are made.
+- CSV exports neutralize spreadsheet-formula prefixes.
+- The official SheetJS artifact is pinned and checksummed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- CI fails for high/critical production dependency findings.
