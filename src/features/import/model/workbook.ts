@@ -212,6 +212,20 @@ function cell(row: CellValue[], mapping: Map<string, number>, key: string): Cell
   return index === undefined ? undefined : row[index];
 }
 
+function hyperlinkKey(rowIndex: number, columnIndex: number): string {
+  return `${rowIndex}:${columnIndex}`;
+}
+
+function cellHyperlink(
+  hyperlinks: Map<string, string>,
+  rowIndex: number,
+  mapping: Map<string, number>,
+  key: string,
+): string | undefined {
+  const columnIndex = mapping.get(key);
+  return columnIndex === undefined ? undefined : hyperlinks.get(hyperlinkKey(rowIndex, columnIndex));
+}
+
 function sourceRecord(headers: string[], row: CellValue[]): SourceRecord {
   const named = headers
     .map((header, index) => ({ header: header.trim(), value: row[index] ?? null }))
@@ -296,6 +310,7 @@ interface MutableStats {
 
 function readUrl(
   raw: CellValue | undefined,
+  hyperlinkTarget: string | undefined,
   label: string,
   rowNumber: number,
   recordLabel: string,
@@ -303,9 +318,19 @@ function readUrl(
   warnings: string[],
   stats: MutableStats,
 ): string {
-  const normalized = normalizeUrl(raw);
+  const normalizedTarget = normalizeUrl(hyperlinkTarget);
+  const normalizedSource = normalizeUrl(raw);
+  const normalized = normalizedTarget.valid ? normalizedTarget : normalizedSource;
   if (normalized.repaired) stats.repairedUrlCount += 1;
-  if (!isMissing(raw) && !normalized.valid) {
+  if (!isMissing(hyperlinkTarget) && !normalizedTarget.valid) {
+    makeIssue(issues, warnings, {
+      severity: 'warning', code: 'invalid-url', rowNumber, recordLabel, field: label,
+      sourceValue: sourceText(hyperlinkTarget),
+      message: normalizedSource.valid
+        ? `${label} contained an unsafe embedded hyperlink; the displayed URL was used instead.`
+        : `${label} does not contain a safe, usable HTTP(S) link.`,
+    });
+  } else if (!isMissing(raw) && !normalized.valid) {
     makeIssue(issues, warnings, {
       severity: 'warning', code: 'invalid-url', rowNumber, recordLabel, field: label,
       sourceValue: sourceText(raw), message: `${label} is not a safe, usable HTTP(S) link.`,
@@ -362,9 +387,11 @@ function scoreTotal(
 
 function creatorFromRow(
   row: CellValue[],
+  rowIndex: number,
   rowNumber: number,
   headers: string[],
   mapping: Map<string, number>,
+  hyperlinks: Map<string, string>,
   issues: ImportIssue[],
   stats: MutableStats,
 ): { record: CreatorRecord; identitySeed: string } | null {
@@ -373,13 +400,17 @@ function creatorFromRow(
   const warnings: string[] = [];
   const recordLabel = creatorName || `Row ${rowNumber}`;
   const source = sourceRecord(headers, row);
-  const tiktokUrl = readUrl(cell(row, mapping, 'tiktokUrl'), 'TikTok URL', rowNumber, recordLabel, issues, warnings, stats);
-  const instagramUrl = readUrl(cell(row, mapping, 'instagramUrl'), 'Instagram URL', rowNumber, recordLabel, issues, warnings, stats);
-  const youtubeUrl = readUrl(cell(row, mapping, 'youtubeUrl'), 'YouTube URL', rowNumber, recordLabel, issues, warnings, stats);
-  const twitterUrl = readUrl(cell(row, mapping, 'twitterUrl'), 'X/Twitter URL', rowNumber, recordLabel, issues, warnings, stats);
-  const linkInBio = readUrl(cell(row, mapping, 'linkInBio'), 'Link-in-Bio', rowNumber, recordLabel, issues, warnings, stats);
+  const tiktokUrl = readUrl(cell(row, mapping, 'tiktokUrl'), cellHyperlink(hyperlinks, rowIndex, mapping, 'tiktokUrl'), 'TikTok URL', rowNumber, recordLabel, issues, warnings, stats);
+  const instagramUrl = readUrl(cell(row, mapping, 'instagramUrl'), cellHyperlink(hyperlinks, rowIndex, mapping, 'instagramUrl'), 'Instagram URL', rowNumber, recordLabel, issues, warnings, stats);
+  const youtubeUrl = readUrl(cell(row, mapping, 'youtubeUrl'), cellHyperlink(hyperlinks, rowIndex, mapping, 'youtubeUrl'), 'YouTube URL', rowNumber, recordLabel, issues, warnings, stats);
+  const twitterUrl = readUrl(cell(row, mapping, 'twitterUrl'), cellHyperlink(hyperlinks, rowIndex, mapping, 'twitterUrl'), 'X/Twitter URL', rowNumber, recordLabel, issues, warnings, stats);
+  const linkInBio = readUrl(cell(row, mapping, 'linkInBio'), cellHyperlink(hyperlinks, rowIndex, mapping, 'linkInBio'), 'Link-in-Bio', rowNumber, recordLabel, issues, warnings, stats);
   const otherPlatform = displayText(cell(row, mapping, 'otherPlatform'));
-  const otherPlatformUrls = extractUrls(cell(row, mapping, 'otherPlatform'));
+  const otherPlatformTarget = cellHyperlink(hyperlinks, rowIndex, mapping, 'otherPlatform');
+  const preferredOtherPlatformUrl = otherPlatformTarget
+    ? readUrl(cell(row, mapping, 'otherPlatform'), otherPlatformTarget, 'Other Platform', rowNumber, recordLabel, issues, warnings, stats)
+    : '';
+  const otherPlatformUrls = [...new Set([preferredOtherPlatformUrl, ...extractUrls(cell(row, mapping, 'otherPlatform'))].filter(Boolean))];
   const emails = readEmails(cell(row, mapping, 'emailRaw'), rowNumber, recordLabel, issues, warnings, stats);
   const hasIdentitySignal = Boolean(primaryPlatform || tiktokUrl || instagramUrl || youtubeUrl || twitterUrl || otherPlatformUrls.length);
   if (!creatorName || !hasIdentitySignal) {
@@ -455,9 +486,11 @@ function creatorFromRow(
 
 function b2bFromRow(
   row: CellValue[],
+  rowIndex: number,
   rowNumber: number,
   headers: string[],
   mapping: Map<string, number>,
+  hyperlinks: Map<string, string>,
   issues: ImportIssue[],
   stats: MutableStats,
 ): { record: B2BRecord; identitySeed: string } | null {
@@ -465,10 +498,16 @@ function b2bFromRow(
   const warnings: string[] = [];
   const recordLabel = companyName || `Row ${rowNumber}`;
   const source = sourceRecord(headers, row);
-  const website = readUrl(cell(row, mapping, 'website'), 'Website', rowNumber, recordLabel, issues, warnings, stats);
-  const linkedInPage = readUrl(cell(row, mapping, 'linkedInPage'), 'LinkedIn Page', rowNumber, recordLabel, issues, warnings, stats);
-  const linkedInProfile = readUrl(cell(row, mapping, 'linkedInProfile'), 'LinkedIn Profile', rowNumber, recordLabel, issues, warnings, stats);
-  const instagram = normalizeInstagram(cell(row, mapping, 'instagramRaw'));
+  const website = readUrl(cell(row, mapping, 'website'), cellHyperlink(hyperlinks, rowIndex, mapping, 'website'), 'Website', rowNumber, recordLabel, issues, warnings, stats);
+  const linkedInPage = readUrl(cell(row, mapping, 'linkedInPage'), cellHyperlink(hyperlinks, rowIndex, mapping, 'linkedInPage'), 'LinkedIn Page', rowNumber, recordLabel, issues, warnings, stats);
+  const linkedInProfile = readUrl(cell(row, mapping, 'linkedInProfile'), cellHyperlink(hyperlinks, rowIndex, mapping, 'linkedInProfile'), 'LinkedIn Profile', rowNumber, recordLabel, issues, warnings, stats);
+  const instagramRaw = cell(row, mapping, 'instagramRaw');
+  const instagram = normalizeInstagram(instagramRaw);
+  const instagramTarget = cellHyperlink(hyperlinks, rowIndex, mapping, 'instagramRaw');
+  const instagramUrl = instagramTarget
+    ? readUrl(instagram.url || instagramRaw, instagramTarget, 'Instagram', rowNumber, recordLabel, issues, warnings, stats)
+    : instagram.url;
+  const instagramHandle = instagram.handle || normalizeInstagram(instagramUrl).handle;
   if (instagram.url && !/^https?:/i.test(displayText(cell(row, mapping, 'instagramRaw')))) stats.repairedUrlCount += 1;
   const emails = readEmails(cell(row, mapping, 'emailRaw'), rowNumber, recordLabel, issues, warnings, stats);
   const decisionMaker = displayText(cell(row, mapping, 'decisionMaker'));
@@ -499,8 +538,8 @@ function b2bFromRow(
     location,
     website,
     instagramRaw: instagram.raw,
-    instagramHandle: instagram.handle,
-    instagramUrl: instagram.url,
+    instagramHandle,
+    instagramUrl,
     linkedInPage,
     decisionMaker,
     role: displayText(cell(row, mapping, 'role')),
@@ -533,7 +572,7 @@ function b2bFromRow(
     hypothesizedPainEvidence: displayText(cell(row, mapping, 'hypothesizedPainEvidence')),
   };
   const searchText = Object.values(values).filter(value => typeof value === 'string').join(' ').toLocaleLowerCase();
-  if (website || linkedInPage || linkedInProfile || emails.length || instagram.url) stats.contactableCount += 1;
+  if (website || linkedInPage || linkedInProfile || emails.length || instagramUrl) stats.contactableCount += 1;
   return {
     identitySeed,
     record: {
@@ -544,6 +583,13 @@ function b2bFromRow(
 
 export function importWorkbookRows(payload: WorkbookRowsPayload): ImportResult {
   const detection = detectWorkbookHeaders(payload.rows);
+  const hyperlinks = new Map(
+    (payload.hyperlinks ?? [])
+      .filter(link => Number.isInteger(link.rowIndex) && link.rowIndex >= 0
+        && Number.isInteger(link.columnIndex) && link.columnIndex >= 0
+        && typeof link.target === 'string' && link.target.trim())
+      .map(link => [hyperlinkKey(link.rowIndex, link.columnIndex), link.target.trim()]),
+  );
   const schema = detection.kind === 'creator' ? CREATOR_SCHEMA : B2B_SCHEMA;
   const aliases = aliasesFor(schema);
   const mapping = buildMapping(detection.headers, schema);
@@ -560,14 +606,15 @@ export function importWorkbookRows(payload: WorkbookRowsPayload): ImportResult {
   };
   const parsed: Array<{ record: CreatorRecord | B2BRecord; identitySeed: string }> = [];
   payload.rows.slice(detection.headerRowIndex + 1).forEach((row, offset) => {
+    const rowIndex = detection.headerRowIndex + offset + 1;
     const rowNumber = detection.headerRowIndex + offset + 2;
     if (!hasRowData(row)) {
       stats.blankRowCount += 1;
       return;
     }
     const candidate = detection.kind === 'creator'
-      ? creatorFromRow(row, rowNumber, detection.headers, mapping, issues, stats)
-      : b2bFromRow(row, rowNumber, detection.headers, mapping, issues, stats);
+      ? creatorFromRow(row, rowIndex, rowNumber, detection.headers, mapping, hyperlinks, issues, stats)
+      : b2bFromRow(row, rowIndex, rowNumber, detection.headers, mapping, hyperlinks, issues, stats);
     if (candidate) parsed.push(candidate);
   });
   if (parsed.length === 0) throw new Error(`No valid ${detection.kind === 'creator' ? 'creator' : 'B2B prospect'} records were found.`);

@@ -4,9 +4,34 @@ import { XLSX } from '../scripts/load-official-sheetjs';
 import { b2bRows, creatorRows } from '../src/test/builders/workbookRows';
 import type { CellValue } from '../src/features/import/model/import.types';
 
-function createWorkbook(rows: CellValue[][], fileName: string, testInfo: TestInfo): string {
+interface HyperlinkSpec {
+  rowIndex: number;
+  header: string;
+  target: string;
+}
+
+function columnName(index: number): string {
+  let current = index + 1;
+  let name = '';
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    current = Math.floor((current - 1) / 26);
+  }
+  return name;
+}
+
+function createWorkbook(rows: CellValue[][], fileName: string, testInfo: TestInfo, hyperlinks: HyperlinkSpec[] = []): string {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), 'Research');
+  const sheet = XLSX.utils.aoa_to_sheet(rows) as Record<string, { l?: { Target: string } }>;
+  hyperlinks.forEach(link => {
+    const columnIndex = rows[3].indexOf(link.header);
+    if (columnIndex < 0) throw new Error(`Missing hyperlink test header: ${link.header}`);
+    const address = `${columnName(columnIndex)}${link.rowIndex + 1}`;
+    if (!sheet[address]) throw new Error(`Missing hyperlink test cell: ${address}`);
+    sheet[address].l = { Target: link.target };
+  });
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Research');
   const filePath = testInfo.outputPath(fileName);
   const bytes = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
   writeFileSync(filePath, new Uint8Array(bytes));
@@ -71,6 +96,35 @@ test('B2B review supports comparison and full-fidelity export', async ({ page },
   await page.getByRole('button', { name: 'All (3)' }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/^bntyful-b2b-all-\d{4}-\d{2}-\d{2}\.csv$/);
+});
+
+test('preserves exact Excel hyperlink targets in cards and prospect details', async ({ page }, testInfo) => {
+  const rows = b2bRows(1);
+  const websiteColumn = rows[3].indexOf('Website');
+  const linkedInPageColumn = rows[3].indexOf('LinkedIn Page');
+  const linkedInProfileColumn = rows[3].indexOf('LinkedIn Profile');
+  rows[4][websiteColumn] = 'Famousbrands.co.za';
+  rows[4][linkedInPageColumn] = 'linkedin.com/company/famous-brands';
+  rows[4][linkedInProfileColumn] = 'linkedin.com/in/darren-hele';
+  const workbookPath = createWorkbook(rows, 'embedded-links.xlsx', testInfo, [
+    { rowIndex: 4, header: 'Website', target: 'https://famousbrands.co.za/' },
+    { rowIndex: 4, header: 'LinkedIn Page', target: 'https://www.linkedin.com/company/famous-brands/' },
+    { rowIndex: 4, header: 'LinkedIn Profile', target: 'https://www.linkedin.com/in/darren-hele-21483b45/' },
+  ]);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /B2B prospect list/ }).click();
+  await importWorkbook(page, workbookPath);
+
+  const card = page.locator('.prospect-card').first();
+  await expect(card.getByRole('link', { name: 'Open Prospect 1 website' })).toHaveAttribute('href', 'https://famousbrands.co.za/');
+  await expect(card.getByRole('link', { name: 'Open Decision Maker 1 on LinkedIn' })).toHaveAttribute('href', 'https://www.linkedin.com/in/darren-hele-21483b45/');
+
+  await card.getByRole('button', { name: 'Review full profile' }).click();
+  const detail = page.getByRole('dialog', { name: 'Prospect 1', exact: true });
+  await expect(detail.getByRole('link', { name: /Company website/ })).toHaveAttribute('href', 'https://famousbrands.co.za/');
+  await expect(detail.getByRole('link', { name: /Company LinkedIn/ })).toHaveAttribute('href', 'https://www.linkedin.com/company/famous-brands/');
+  await expect(detail.getByRole('link', { name: /Decision-maker LinkedIn/ })).toHaveAttribute('href', 'https://www.linkedin.com/in/darren-hele-21483b45/');
 });
 
 test('B2B cards stay full-width and collision-free at responsive breakpoints', async ({ page }, testInfo) => {

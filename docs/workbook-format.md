@@ -44,7 +44,8 @@ Identity requires `Company Name` and at least one of website, LinkedIn company p
 ## Normalization
 
 - `K`, `M`, and `B` numeric suffixes are supported.
-- Scheme-less domains become safe `https://` links when valid.
+- Safe embedded Excel hyperlink targets take precedence over shortened display text; the displayed source value is still retained for audit and export.
+- Scheme-less and multi-label domains such as `.co.za`, `.co.uk`, and `.com.au` become complete `https://` links when valid.
 - Instagram handles and URLs become a display handle and canonical profile link.
 - Semicolon-, comma-, or newline-separated email addresses are validated individually.
 - Qualified yes/no text retains both its boolean meaning and qualifier.

@@ -12,6 +12,8 @@ interface SheetJsApi {
   write(workbook: Workbook, options: Record<string, unknown>): Uint8Array;
   utils: {
     sheet_to_json<T>(sheet: unknown, options: Record<string, unknown>): T[];
+    decode_cell(address: string): { r: number; c: number };
+    decode_range(range: string): { s: { r: number; c: number }; e: { r: number; c: number } };
     book_new(): Workbook;
     book_append_sheet(workbook: Workbook, sheet: unknown, name: string): void;
     aoa_to_sheet(rows: unknown[][]): unknown;

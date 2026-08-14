@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { B2BRecord, CreatorRecord, ImportResult } from './import.types';
+import type { B2BRecord, CellHyperlink, CreatorRecord, ImportResult } from './import.types';
 import { importWorkbookRows } from './workbook';
 import { b2bRows, creatorRows } from '@/test/builders/workbookRows';
 import { deriveTaxonomy } from '@/shared/lib/taxonomy';
@@ -10,6 +10,12 @@ function importCreator(count = 88): ImportResult<CreatorRecord> {
 
 function importB2B(count = 24): ImportResult<B2BRecord> {
   return importWorkbookRows({ rows: b2bRows(count), fileName: 'b2b.xlsx', fileSize: 1024, sheetName: 'Prospects', additionalSheets: [], expectedKind: 'b2b' }) as ImportResult<B2BRecord>;
+}
+
+function hyperlinkFor(rows: unknown[][], rowIndex: number, header: string, target: string): CellHyperlink {
+  const columnIndex = rows[3].indexOf(header);
+  if (columnIndex < 0) throw new Error(`Missing test header: ${header}`);
+  return { rowIndex, columnIndex, target };
 }
 
 describe('workbook contracts', () => {
@@ -32,6 +38,54 @@ describe('workbook contracts', () => {
     expect(result.records[0]).toMatchObject({ dateAdded: '2026-08-10', sourceTotalScore: 14, calculatedTotalScore: 14 });
     expect(result.records[0].emails).toEqual(['first@example.test', 'second@example.test']);
     expect(result.records[1].linkedInProfile).toContain('linkedin.com/in/alternate-contact');
+  });
+
+  it('uses safe embedded hyperlink targets while retaining visible source values', () => {
+    const rows = b2bRows(1);
+    const websiteColumn = rows[3].indexOf('Website');
+    const instagramColumn = rows[3].indexOf('Instagram Handle');
+    const linkedInColumn = rows[3].indexOf('LinkedIn Profile');
+    rows[4][websiteColumn] = 'Famousbrands.co.za';
+    rows[4][instagramColumn] = '@famousbrands';
+    rows[4][linkedInColumn] = 'linkedin.com/in/darren-hele';
+    const hyperlinks = [
+      hyperlinkFor(rows, 4, 'Website', 'https://famousbrands.co.za/'),
+      hyperlinkFor(rows, 4, 'Instagram Handle', 'https://www.instagram.com/famousbrandssa/?hl=en'),
+      hyperlinkFor(rows, 4, 'LinkedIn Profile', 'https://www.linkedin.com/in/darren-hele-21483b45/'),
+    ];
+
+    const result = importWorkbookRows({ rows, hyperlinks, fileName: 'linked.xlsx', fileSize: 1, sheetName: 'Prospects', additionalSheets: [], expectedKind: 'b2b' }) as ImportResult<B2BRecord>;
+    const record = result.records[0];
+    expect(record.website).toBe('https://famousbrands.co.za/');
+    expect(record.instagramHandle).toBe('@famousbrands');
+    expect(record.instagramUrl).toBe('https://www.instagram.com/famousbrandssa/?hl=en');
+    expect(record.linkedInProfile).toBe('https://www.linkedin.com/in/darren-hele-21483b45/');
+    expect(record.source.values[record.source.headers.indexOf('Website')]).toBe('Famousbrands.co.za');
+    expect(record.source.values[record.source.headers.indexOf('LinkedIn Profile')]).toBe('linkedin.com/in/darren-hele');
+  });
+
+  it('rejects unsafe embedded targets and falls back to the displayed URL', () => {
+    const rows = b2bRows(1);
+    const websiteColumn = rows[3].indexOf('Website');
+    rows[4][websiteColumn] = 'fallback.co.za';
+    const hyperlinks = [hyperlinkFor(rows, 4, 'Website', 'javascript:alert(1)')];
+
+    const result = importWorkbookRows({ rows, hyperlinks, fileName: 'unsafe-link.xlsx', fileSize: 1, sheetName: 'Prospects', additionalSheets: [], expectedKind: 'b2b' }) as ImportResult<B2BRecord>;
+    expect(result.records[0].website).toBe('https://fallback.co.za/');
+    expect(result.report.issues).toContainEqual(expect.objectContaining({
+      code: 'invalid-url',
+      field: 'Website',
+      sourceValue: 'javascript:alert(1)',
+    }));
+  });
+
+  it('uses embedded hyperlinks for creator channels through the shared importer', () => {
+    const rows = creatorRows(1);
+    const hyperlinks = [hyperlinkFor(rows, 4, 'Instagram URL', 'https://www.instagram.com/creator-1-exact/')];
+    const result = importWorkbookRows({ rows, hyperlinks, fileName: 'creator-links.xlsx', fileSize: 1, sheetName: 'Creators', additionalSheets: [], expectedKind: 'creator' }) as ImportResult<CreatorRecord>;
+
+    expect(result.records[0].instagramUrl).toBe('https://www.instagram.com/creator-1-exact/');
+    expect(result.records[0].source.values[result.records[0].source.headers.indexOf('Instagram URL')]).toBe('instagram.com/creator1');
   });
 
   it('derives unseen taxonomies and never injects sample industries', () => {

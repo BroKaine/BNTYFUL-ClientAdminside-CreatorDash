@@ -3,6 +3,11 @@ import type { CellValue } from '@/features/import/model/import.types';
 const MISSING_MARKERS = new Set(['', 'n/a', 'na', 'n.a.', 'not available', '-']);
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HTTP_PROTOCOLS = new Set(['http:', 'https:']);
+const EXPLICIT_URL_PATTERN = 'https?:\\/\\/[^\\s)\\]}> ,]+';
+const DOMAIN_LABEL_PATTERN = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+const TOP_LEVEL_DOMAIN_PATTERN = '[a-z](?:[a-z0-9-]{0,61}[a-z0-9])';
+const SCHEMELESS_URL_PATTERN = `(?:www\\.)?(?:${DOMAIN_LABEL_PATTERN}\\.)+${TOP_LEVEL_DOMAIN_PATTERN}(?::\\d{1,5})?(?:[/?#][^\\s)\\]}> ,]*)?`;
+const URL_PATTERN = `${EXPLICIT_URL_PATTERN}|${SCHEMELESS_URL_PATTERN}`;
 
 export function sourceText(value: CellValue | undefined): string {
   if (value === null || value === undefined) return '';
@@ -63,10 +68,8 @@ export interface NormalizedUrl {
 }
 
 function extractFirstUrl(value: string): string {
-  const explicit = value.match(/https?:\/\/[^\s)\]}>,]+/i)?.[0];
-  if (explicit) return explicit.replace(/[.;]+$/, '');
-  const domain = value.match(/(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z]{2,})(?:\/[^\s)\]}>,]*)?/i)?.[0];
-  return domain?.replace(/[.;]+$/, '') ?? '';
+  const candidate = value.match(new RegExp(URL_PATTERN, 'i'))?.[0];
+  return candidate?.replace(/[.;]+$/, '') ?? '';
 }
 
 export function normalizeUrl(value: CellValue | undefined): NormalizedUrl {
@@ -89,7 +92,7 @@ export function normalizeUrl(value: CellValue | undefined): NormalizedUrl {
 export function extractUrls(value: CellValue | undefined): string[] {
   const raw = displayText(value);
   if (!raw) return [];
-  const candidates = raw.match(/https?:\/\/[^\s)\]}>,]+|(?:www\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z]{2,})(?:\/[^\s)\]}>,]*)?/gi) ?? [];
+  const candidates = raw.match(new RegExp(URL_PATTERN, 'gi')) ?? [];
   return [...new Set(candidates.map(candidate => normalizeUrl(candidate).url).filter(Boolean))];
 }
 

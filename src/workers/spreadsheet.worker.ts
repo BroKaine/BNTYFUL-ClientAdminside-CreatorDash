@@ -1,8 +1,8 @@
 import { importWorkbookRows } from '@/features/import/model/workbook';
-import type { CellValue, WorkerRequest, WorkerResponse } from '@/features/import/model/import.types';
+import type { CellHyperlink, CellValue, WorkerRequest, WorkerResponse } from '@/features/import/model/import.types';
 
 type ParserResponse =
-  | { type: 'parsed'; rows: CellValue[][]; sheetName: string; additionalSheets: string[] }
+  | { type: 'parsed'; rows: CellValue[][]; hyperlinks: CellHyperlink[]; sheetName: string; additionalSheets: string[] }
   | { type: 'error'; message: string };
 
 interface WorkerScope {
@@ -34,6 +34,7 @@ scope.addEventListener('message', event => {
         progress('normalizing', 60);
         const result = importWorkbookRows({
           rows: response.rows,
+          hyperlinks: response.hyperlinks,
           fileName: request.fileName,
           fileSize: request.fileSize,
           sheetName: response.sheetName,

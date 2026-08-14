@@ -8,8 +8,8 @@ Creator and B2B are separate feature domains. Each owns its record model, filter
 
 1. The UI validates extension and the 50 MiB limit.
 2. A Vite module worker creates a dependency-free, same-origin classic parser worker.
-3. The parser worker lazy-loads the local, vendored SheetJS artifact and converts the first worksheet to raw rows without formula or HTML processing.
-4. The module worker receives those rows and applies weighted Creator-versus-B2B schema detection.
+3. The parser worker lazy-loads the local, vendored SheetJS artifact and converts the first worksheet to raw rows plus an aligned map of embedded hyperlink targets, without formula or HTML processing.
+4. The module worker receives those rows and hyperlink targets and applies weighted Creator-versus-B2B schema detection.
 5. A domain parser preserves source rows while producing typed normalized records and data issues.
 6. A deterministic dataset fingerprint is calculated from schema version and sorted stable record IDs.
 7. The main thread receives the finished report and displays preflight before activating the dashboard.

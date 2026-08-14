@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeInstagram, normalizeUrl, parseBooleanLike, parseDate, parseNumber, splitEmails } from './normalize';
+import { extractUrls, normalizeInstagram, normalizeUrl, parseBooleanLike, parseDate, parseNumber, splitEmails } from './normalize';
 
 describe('source normalization', () => {
   it('handles compact numbers without inventing invalid zeroes', () => {
@@ -12,6 +12,16 @@ describe('source normalization', () => {
   it('normalizes safe links and rejects executable schemes', () => {
     expect(normalizeUrl('example.com/path')).toMatchObject({ url: 'https://example.com/path', repaired: true, valid: true });
     expect(normalizeUrl('javascript:alert(1)')).toMatchObject({ url: '', valid: false });
+  });
+
+  it('preserves multi-label domains, subdomains, queries and fragments', () => {
+    expect(normalizeUrl('famousbrands.co.za')).toMatchObject({ url: 'https://famousbrands.co.za/', repaired: true, valid: true });
+    expect(normalizeUrl('example.co.uk/contact?source=list#team').url).toBe('https://example.co.uk/contact?source=list#team');
+    expect(normalizeUrl('partners.example.com.au/path').url).toBe('https://partners.example.com.au/path');
+    expect(extractUrls('Primary: company.co.za; backup: www.company.com.au/path')).toEqual([
+      'https://company.co.za/',
+      'https://www.company.com.au/path',
+    ]);
   });
 
   it('retains qualified boolean meaning', () => {

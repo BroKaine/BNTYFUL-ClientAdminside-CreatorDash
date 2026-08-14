@@ -2,6 +2,12 @@ export type DatasetKind = 'creator' | 'b2b';
 
 export type CellValue = string | number | boolean | Date | null;
 
+export interface CellHyperlink {
+  rowIndex: number;
+  columnIndex: number;
+  target: string;
+}
+
 export type IssueSeverity = 'warning' | 'error';
 
 export interface ImportIssue {
@@ -172,6 +178,7 @@ export interface ImportResult<T extends ImportedRecord = ImportedRecord> {
 
 export interface WorkbookRowsPayload {
   rows: CellValue[][];
+  hyperlinks?: CellHyperlink[];
   fileName: string;
   fileSize: number;
   sheetName: string;

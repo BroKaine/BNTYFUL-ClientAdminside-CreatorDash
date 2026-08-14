@@ -30,6 +30,40 @@ describe('B2B dashboard', () => {
     expect(screen.getByRole('table', { name: 'Prospect comparison' })).toBeVisible();
   });
 
+  it('renders exact resolved workbook links in cards and prospect details', () => {
+    const rows = b2bRows(1);
+    const websiteColumn = rows[3].indexOf('Website');
+    const linkedInPageColumn = rows[3].indexOf('LinkedIn Page');
+    const linkedInProfileColumn = rows[3].indexOf('LinkedIn Profile');
+    rows[4][websiteColumn] = 'Famousbrands.co.za';
+    rows[4][linkedInPageColumn] = 'linkedin.com/company/famous-brands';
+    rows[4][linkedInProfileColumn] = 'linkedin.com/in/darren-hele';
+    const imported = importWorkbookRows({
+      rows,
+      hyperlinks: [
+        { rowIndex: 4, columnIndex: websiteColumn, target: 'https://famousbrands.co.za/' },
+        { rowIndex: 4, columnIndex: linkedInPageColumn, target: 'https://www.linkedin.com/company/famous-brands/' },
+        { rowIndex: 4, columnIndex: linkedInProfileColumn, target: 'https://www.linkedin.com/in/darren-hele-21483b45/' },
+      ],
+      fileName: 'linked.xlsx',
+      fileSize: 1,
+      sheetName: 'Prospects',
+      additionalSheets: [],
+      expectedKind: 'b2b',
+    }) as ImportResult<B2BRecord>;
+
+    const { container } = render(<B2BDashboard result={imported} registerActions={vi.fn()} />);
+    const card = container.querySelector('.prospect-card') as HTMLElement;
+    expect(within(card).getByRole('link', { name: 'Open Prospect 1 website' })).toHaveAttribute('href', 'https://famousbrands.co.za/');
+    expect(within(card).getByRole('link', { name: 'Open Decision Maker 1 on LinkedIn' })).toHaveAttribute('href', 'https://www.linkedin.com/in/darren-hele-21483b45/');
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Review full profile' }));
+    const detail = container.querySelector('[role="dialog"]') as HTMLElement;
+    expect(within(detail).getByRole('link', { name: /Company website/ })).toHaveAttribute('href', 'https://famousbrands.co.za/');
+    expect(within(detail).getByRole('link', { name: /Company LinkedIn/ })).toHaveAttribute('href', 'https://www.linkedin.com/company/famous-brands/');
+    expect(within(detail).getByRole('link', { name: /Decision-maker LinkedIn/ })).toHaveAttribute('href', 'https://www.linkedin.com/in/darren-hele-21483b45/');
+  });
+
   it('has no automatically detectable structural WCAG A/AA violations', async () => {
     const { container } = render(<B2BDashboard result={result()} registerActions={vi.fn()} />);
     const audit = await axe.run(container, { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'], rules: { 'color-contrast': { enabled: false } } });

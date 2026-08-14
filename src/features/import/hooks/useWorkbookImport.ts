@@ -3,6 +3,7 @@ import type { DatasetKind, ImportResult, WorkerResponse } from '../model/import.
 
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = ['.xlsx', '.xls', '.csv'];
+const PARSER_WORKER_VERSION = '2';
 
 export type ImportStatus = 'idle' | 'reading' | 'detecting' | 'normalizing' | 'validating' | 'preflight' | 'error';
 
@@ -47,6 +48,8 @@ export function useWorkbookImport() {
     setState({ ...INITIAL_STATE, status: 'reading', progress: 5 });
     try {
       const buffer = await file.arrayBuffer();
+      const parserWorkerUrl = new URL('workers/spreadsheet-parser.js', document.baseURI);
+      parserWorkerUrl.searchParams.set('v', PARSER_WORKER_VERSION);
       const worker = new Worker(new URL('../../../workers/spreadsheet.worker.ts', import.meta.url), {
         type: 'module',
         name: 'bntyful-spreadsheet-normalizer',
@@ -76,7 +79,7 @@ export function useWorkbookImport() {
         fileSize: file.size,
         expectedKind,
         parserUrl: new URL('vendor/sheetjs/xlsx.full.min.js', document.baseURI).href,
-        parserWorkerUrl: new URL('workers/spreadsheet-parser.js', document.baseURI).href,
+        parserWorkerUrl: parserWorkerUrl.href,
       }, [buffer]);
     } catch (error) {
       terminate();
